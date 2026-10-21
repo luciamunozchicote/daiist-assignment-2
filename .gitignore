@@ -14,3 +14,7 @@ runs/
 
 # Never commit your API key
 .env
+
+# Pretrained checkpoints Ultralytics downloads into the repo root (weights/ is committed)
+/yolo11*.pt
+/yolo26*.pt
