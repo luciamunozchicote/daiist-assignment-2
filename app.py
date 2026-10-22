@@ -124,6 +124,18 @@ def cost_curve(low=None, high=None, costs=None):
     return fig
 
 
+def capacity_plot():
+    cs = R.get("capacity_sweep", [])
+    fig = go.Figure(go.Scatter(x=[c["minutes"] for c in cs], y=[c["cost_per_1000"] for c in cs],
+                               mode="lines+markers", line=dict(color=ACCENT), name="cost"))
+    fig.add_vline(x=C.REVIEW_MINUTES_AVAILABLE, line_dash="dash", line_color=OK,
+                  annotation_text=f"assumed: {C.REVIEW_MINUTES_AVAILABLE} min")
+    fig.update_layout(title="Best achievable cost vs radiologist reading time per night (band re-optimised each time)",
+                      xaxis_title="Radiologist minutes per night for these X-rays", yaxis_title="€ per 1,000 X-rays",
+                      height=400)
+    return fig
+
+
 def per_class_table():
     df = pd.DataFrame(R["test_box"]["per_class"])
     df = df.rename(columns={"class": "Class", "test_instances": "Test instances", "precision": "Precision",
@@ -205,6 +217,7 @@ with gr.Blocks(title="Fracture triage") as demo:
         for comp in inputs:
             comp.change(operating_view, inputs, [cm, kpi, curve])
         demo.load(operating_view, inputs, [cm, kpi, curve])
+        gr.Plot(capacity_plot())
         gr.Markdown("### Chosen strategies on the test split (thresholds chosen on validation)")
         gr.Dataframe(strategies_table(), interactive=False)
 

@@ -1158,5 +1158,79 @@
         "review_no_fracture": 81
       }
     }
+  ],
+  "capacity_sweep": [
+    {
+      "minutes": 0,
+      "low": 0.03,
+      "high": 0.03,
+      "cost_per_1000": 87471.980947044,
+      "review_share": 0.0,
+      "missed_fractures_per_1000": 32.53012048192771
+    },
+    {
+      "minutes": 15,
+      "low": 0.03,
+      "high": 0.06,
+      "cost_per_1000": 72786.66293079294,
+      "review_share": 0.1627626786214626,
+      "missed_fractures_per_1000": 33.73373493975904
+    },
+    {
+      "minutes": 30,
+      "low": 0.03,
+      "high": 0.13,
+      "cost_per_1000": 60786.85906416363,
+      "review_share": 0.32008966096945923,
+      "missed_fractures_per_1000": 35.33855421686747
+    },
+    {
+      "minutes": 45,
+      "low": 0.03,
+      "high": 0.32,
+      "cost_per_1000": 54982.179882319986,
+      "review_share": 0.4810030820958251,
+      "missed_fractures_per_1000": 38.28072289156627
+    },
+    {
+      "minutes": 60,
+      "low": 0.01,
+      "high": 0.32,
+      "cost_per_1000": 40560.941440179326,
+      "review_share": 0.6130288596245447,
+      "missed_fractures_per_1000": 20.877108433734946
+    },
+    {
+      "minutes": 75,
+      "low": 0.0,
+      "high": 0.26,
+      "cost_per_1000": 31779.4340151303,
+      "review_share": 0.8174278509386382,
+      "missed_fractures_per_1000": 6.1518072289156684
+    },
+    {
+      "minutes": 90,
+      "low": 0.0,
+      "high": 0.32,
+      "cost_per_1000": 31981.857663210987,
+      "review_share": 0.847254132810311,
+      "missed_fractures_per_1000": 6.954216867469886
+    },
+    {
+      "minutes": 105,
+      "low": 0.0,
+      "high": 0.32,
+      "cost_per_1000": 31981.857663210987,
+      "review_share": 0.847254132810311,
+      "missed_fractures_per_1000": 6.954216867469886
+    },
+    {
+      "minutes": 120,
+      "low": 0.0,
+      "high": 0.32,
+      "cost_per_1000": 31981.857663210987,
+      "review_share": 0.847254132810311,
+      "missed_fractures_per_1000": 6.954216867469886
+    }
   ]
 }

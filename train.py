@@ -5,7 +5,7 @@ Run with:  uv run python main.py train
 
 1. Download the Roboflow Universe dataset (veda/bone-fracture-detection, v3).
 2. Describe it: instances per class, split sizes, empty images, box sizes.
-3. Finetune YOLO11s from the COCO checkpoint; copy the best weights to weights/.
+3. Finetune YOLO11n from the COCO checkpoint; copy the best weights to weights/.
 4. Evaluate on the test split: per-class precision, recall, AP50, mAP50-95,
    and the confusion matrix. Compare against two baselines: the COCO model
    zero-shot and a predict-nothing model.
@@ -126,16 +126,17 @@ section(f"3. Finetune {C.BASE_MODEL} on {DEVICE}")
 run_dir = C.ROOT / "runs" / "fracture"
 last = run_dir / "weights" / "last.pt"
 best = run_dir / "weights" / "best.pt"
-resumed = False
-if last.exists():
-    # An interrupted run (laptop closed) continues from its last epoch instead
-    # of starting over. A run that already finished raises, and we move on.
-    try:
-        YOLO(str(last)).train(resume=True, device=DEVICE)
-        resumed = True
-    except Exception as error:  # noqa: BLE001
-        print(f"not resuming ({type(error).__name__}: {error})")
-if not resumed and not best.exists():
+# Ultralytics marks a finished run's last.pt with epoch = -1 (it also does
+# this after early stopping); an interrupted run keeps its epoch number.
+finished = last.exists() and torch.load(last, map_location="cpu", weights_only=False).get("epoch") == -1
+if last.exists() and not finished:
+    # Interrupted run (laptop closed): continue from the last epoch instead of
+    # starting over.
+    print("resuming interrupted run")
+    YOLO(str(last)).train(resume=True, device=DEVICE)
+elif finished and best.exists():
+    print(f"run already complete: reusing {best.relative_to(C.ROOT)}")
+else:
     model = YOLO(C.BASE_MODEL)
     model.train(data=str(data_yaml), epochs=C.EPOCHS, patience=C.PATIENCE, imgsz=C.IMGSZ, batch=C.BATCH,
                 seed=C.SEED, deterministic=True, device=DEVICE, project=str(C.ROOT / "runs"),
@@ -244,6 +245,19 @@ for s in strategies:
           f"({s['reviews_per_night']:.1f}/night, {s['radiologist_minutes_per_night']:.0f} min) | "
           f"missed {s['missed_fractures_per_1000']:.0f}/1000 | splints {s['unneeded_splints_per_1000']:.0f}/1000")
 
+# How much is radiologist time worth? Re-optimise the band for each amount of
+# reading time per night (thresholds on validation, cost on test).
+section("6b. Cost vs radiologist time available")
+capacity_sweep = []
+for minutes in range(0, 121, 15):
+    share_cap = min(1.0, (minutes / C.REVIEW_MINUTES) / C.CASES_PER_NIGHT)
+    lo, hi, _, _ = costing.best_band(val_scores, val_labels, max_share=share_cap)
+    s = strategy(f"{minutes} min", test_scores, lo, hi, "")
+    capacity_sweep.append({"minutes": minutes, "low": lo, "high": hi, "cost_per_1000": s["cost_per_1000"],
+                           "review_share": s["review_share"], "missed_fractures_per_1000": s["missed_fractures_per_1000"]})
+    print(f"{minutes:3d} min/night -> band {lo:.2f}-{hi:.2f} | €{s['cost_per_1000']:8,.0f} per 1,000 | "
+          f"reviewed {s['review_share']:.0%} | missed {s['missed_fractures_per_1000']:.0f}/1000")
+
 # ---------------------------------------------------------------------------
 # 7. Save artifacts for app.py
 # ---------------------------------------------------------------------------
@@ -262,6 +276,7 @@ section("7. Saving artifacts")
     "val_sweep": val_sweep,
     "test_sweep": costing.sweep_single(test_scores, test_labels),
     "strategies": strategies,
+    "capacity_sweep": capacity_sweep,
 }, indent=2))
 (C.ARTIFACTS / "image_scores.json").write_text(json.dumps({
     "val": {"scores": val_scores, "labels": val_labels},
