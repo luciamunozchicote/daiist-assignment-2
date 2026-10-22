@@ -19,7 +19,9 @@ PROJECT = "bone-fracture-detection-daoon"
 VERSION = 3          # the version with no augmentation: every image is a real X-ray
 
 # --- Training ---------------------------------------------------------------
-BASE_MODEL = "yolo11n.pt"
+# Both sizes are finetuned; the one with the lower expected cost on the
+# VALIDATION split is kept (the test split never chooses anything).
+CANDIDATE_MODELS = ["yolo11n.pt", "yolo11s.pt"]
 EPOCHS = 80
 PATIENCE = 20        # stop early if validation mAP has not improved for 20 epochs
 IMGSZ = 512        # the source X-rays are at most 512 px: upscaling adds no detail

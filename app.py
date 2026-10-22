@@ -159,8 +159,8 @@ def baselines_table():
     b = R["baselines"]
     return pd.DataFrame([
         {"Model": "Predict nothing", "mAP50 (boxes)": 0.0, "Image-level ROC-AUC": b["predict_nothing"]["image_roc_auc"]},
-        {"Model": "COCO yolo11n zero-shot", "mAP50 (boxes)": 0.0, "Image-level ROC-AUC": round(b["coco_zero_shot"]["image_roc_auc"], 3)},
-        {"Model": "Finetuned yolo11n", "mAP50 (boxes)": round(b["finetuned"]["map50"], 3), "Image-level ROC-AUC": round(b["finetuned"]["image_roc_auc"], 3)},
+        {"Model": f"COCO {R['training']['base_model'].removesuffix('.pt')} zero-shot", "mAP50 (boxes)": 0.0, "Image-level ROC-AUC": round(b["coco_zero_shot"]["image_roc_auc"], 3)},
+        {"Model": f"Finetuned {R['training']['base_model'].removesuffix('.pt')}", "mAP50 (boxes)": round(b["finetuned"]["map50"], 3), "Image-level ROC-AUC": round(b["finetuned"]["image_roc_auc"], 3)},
     ])
 
 
@@ -173,6 +173,14 @@ def strategies_table():
                      "Missed fractures /1,000": round(s["missed_fractures_per_1000"], 1),
                      "Unneeded splints /1,000": round(s["unneeded_splints_per_1000"], 1)})
     return pd.DataFrame(rows)
+
+
+def selection_table():
+    rows = R["training"].get("model_selection", [])
+    return pd.DataFrame([{"Model": m["base_model"], "Epochs run": m["epochs_run"], "Val mAP50": round(m["val_map50"], 3),
+                          "Val image ROC-AUC": round(m["val_image_roc_auc"], 3),
+                          "Val € per 1,000": round(m["val_cost_per_1000"]),
+                          "Kept": "✅" if m["base_model"] == R["training"]["base_model"] else ""} for m in rows])
 
 
 def dataset_table():
@@ -236,6 +244,8 @@ with gr.Blocks(title="Fracture triage") as demo:
         gr.Plot(confusion_plot())
         gr.Markdown("### Baselines on the same test split")
         gr.Dataframe(baselines_table(), interactive=False)
+        gr.Markdown("### Model size chosen on the validation split")
+        gr.Dataframe(selection_table(), interactive=False)
 
     with gr.Tab("Dataset"):
         gr.Dataframe(dataset_table(), interactive=False)

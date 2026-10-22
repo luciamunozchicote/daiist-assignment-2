@@ -5,7 +5,8 @@ Run with:  uv run python main.py train
 
 1. Download the Roboflow Universe dataset (veda/bone-fracture-detection, v3).
 2. Describe it: instances per class, split sizes, empty images, box sizes.
-3. Finetune YOLO11n from the COCO checkpoint; copy the best weights to weights/.
+3. Finetune YOLO11n and YOLO11s from their COCO checkpoints; keep the one
+   with the lower expected cost on the validation split in weights/.
 4. Evaluate on the test split: per-class precision, recall, AP50, mAP50-95,
    and the confusion matrix. Compare against two baselines: the COCO model
    zero-shot and a predict-nothing model.
@@ -21,6 +22,7 @@ import json
 import random
 import shutil
 import statistics
+from pathlib import Path
 from collections import Counter
 
 import numpy as np
@@ -120,29 +122,59 @@ for split in SPLITS:
     print(f"      per class: {s['per_class']}")
 
 # ---------------------------------------------------------------------------
-# 3. Finetune
+# 3. Finetune each candidate size, keep the one that is cheaper on validation
 # ---------------------------------------------------------------------------
-section(f"3. Finetune {C.BASE_MODEL} on {DEVICE}")
-run_dir = C.ROOT / "runs" / "fracture"
-last = run_dir / "weights" / "last.pt"
-best = run_dir / "weights" / "best.pt"
-# Ultralytics marks a finished run's last.pt with epoch = -1 (it also does
-# this after early stopping); an interrupted run keeps its epoch number.
-finished = last.exists() and torch.load(last, map_location="cpu", weights_only=False).get("epoch") == -1
-if last.exists() and not finished:
-    # Interrupted run (laptop closed): continue from the last epoch instead of
-    # starting over.
-    print("resuming interrupted run")
-    YOLO(str(last)).train(resume=True, device=DEVICE)
-elif finished and best.exists():
-    print(f"run already complete: reusing {best.relative_to(C.ROOT)}")
-else:
-    model = YOLO(C.BASE_MODEL)
-    model.train(data=str(data_yaml), epochs=C.EPOCHS, patience=C.PATIENCE, imgsz=C.IMGSZ, batch=C.BATCH,
-                seed=C.SEED, deterministic=True, device=DEVICE, project=str(C.ROOT / "runs"),
-                name="fracture", exist_ok=True, plots=True, verbose=False)
-shutil.copy(best, C.WEIGHTS)
-print(f"best weights -> {C.WEIGHTS}")
+def image_scores(yolo, split):
+    """Image-level score = highest confidence of any box (0 if none)."""
+    scores, labels, names = [], [], []
+    for img in image_paths(split):
+        r = yolo.predict(str(img), conf=0.001, imgsz=C.IMGSZ, device=DEVICE, verbose=False)[0]
+        conf = r.boxes.conf.cpu().numpy() if len(r.boxes) else np.array([])
+        scores.append(float(conf.max()) if conf.size else 0.0)
+        labels.append(int(has_fracture(img)))
+        names.append(img.name)
+    return scores, labels, names
+
+
+def finetune(base_model):
+    run_dir = C.ROOT / "runs" / f"fracture-{Path(base_model).stem}"
+    last, best = run_dir / "weights" / "last.pt", run_dir / "weights" / "best.pt"
+    # Ultralytics marks a finished run's last.pt with epoch = -1 (also after
+    # early stopping); an interrupted run keeps its epoch number.
+    finished = last.exists() and torch.load(last, map_location="cpu", weights_only=False).get("epoch") == -1
+    if last.exists() and not finished:
+        print(f"{base_model}: resuming interrupted run")   # laptop was closed mid-run
+        YOLO(str(last)).train(resume=True, device=DEVICE)
+    elif finished and best.exists():
+        print(f"{base_model}: run already complete, reusing {best.relative_to(C.ROOT)}")
+    else:
+        YOLO(base_model).train(data=str(data_yaml), epochs=C.EPOCHS, patience=C.PATIENCE, imgsz=C.IMGSZ,
+                               batch=C.BATCH, seed=C.SEED, deterministic=True, device=DEVICE,
+                               project=str(C.ROOT / "runs"), name=run_dir.name, exist_ok=True,
+                               plots=True, verbose=False)
+    return best
+
+
+section(f"3. Finetune {', '.join(C.CANDIDATE_MODELS)} on {DEVICE}")
+model_selection = []
+for base_model in C.CANDIDATE_MODELS:
+    best_path = finetune(base_model)
+    v_scores, v_labels, _ = image_scores(YOLO(str(best_path)), "val")
+    lo, hi, _, _ = costing.best_band(v_scores, v_labels)
+    v_cost = costing.cost_per_1000(costing.outcome_rates(v_scores, v_labels, lo, hi))
+    hist = (best_path.parent.parent / "results.csv").read_text().strip().splitlines()
+    header = [h.strip() for h in hist[0].split(",")]
+    v_map50 = max(float(r.split(",")[header.index("metrics/mAP50(B)")]) for r in hist[1:])
+    model_selection.append({"base_model": base_model, "weights": str(best_path.relative_to(C.ROOT)),
+                            "epochs_run": len(hist) - 1, "val_map50": v_map50,
+                            "val_image_roc_auc": roc_auc_score(v_labels, v_scores),
+                            "val_cost_per_1000": v_cost})
+    print(f"{base_model}: val mAP50 {v_map50:.3f} | val image ROC-AUC {model_selection[-1]['val_image_roc_auc']:.3f} | "
+          f"val cost €{v_cost:,.0f} per 1,000 at its best band")
+winner = min(model_selection, key=lambda m: m["val_cost_per_1000"])
+BASE_MODEL = winner["base_model"]
+shutil.copy(C.ROOT / winner["weights"], C.WEIGHTS)
+print(f"-> keeping {BASE_MODEL} (lowest validation cost); weights -> {C.WEIGHTS}")
 model = YOLO(str(C.WEIGHTS))
 
 # ---------------------------------------------------------------------------
@@ -173,16 +205,6 @@ confusion = res.confusion_matrix.matrix.tolist()
 section("5. Image-level scores")
 
 
-def image_scores(yolo, split, any_class=True):
-    scores, labels, names = [], [], []
-    for img in image_paths(split):
-        r = yolo.predict(str(img), conf=0.001, imgsz=C.IMGSZ, device=DEVICE, verbose=False)[0]
-        conf = r.boxes.conf.cpu().numpy() if len(r.boxes) else np.array([])
-        scores.append(float(conf.max()) if conf.size else 0.0)
-        labels.append(int(has_fracture(img)))
-        names.append(img.name)
-    return scores, labels, names
-
 
 val_scores, val_labels, _ = image_scores(model, "val")
 test_scores, test_labels, test_names = image_scores(model, "test")
@@ -192,7 +214,7 @@ print(f"finetuned model: image-level ROC-AUC on test = {auc_model:.3f}")
 # Baseline 1: COCO model zero-shot. COCO has no fracture class, so it cannot
 # produce a single correct box (AP = 0). At image level we let ANY detection
 # count as "fracture" to give it its best possible chance.
-coco = YOLO(C.BASE_MODEL)
+coco = YOLO(BASE_MODEL)
 coco_scores, _, _ = image_scores(coco, "test")
 auc_coco = roc_auc_score(test_labels, coco_scores)
 print(f"COCO zero-shot: AP50 = 0 (no fracture class); image-level ROC-AUC = {auc_coco:.3f}")
@@ -264,7 +286,7 @@ for minutes in range(0, 121, 15):
 section("7. Saving artifacts")
 (C.ARTIFACTS / "results.json").write_text(json.dumps({
     "dataset": {"workspace": C.WORKSPACE, "project": C.PROJECT, "version": C.VERSION, "names": NAMES, "stats": stats},
-    "training": {"base_model": C.BASE_MODEL, "epochs": C.EPOCHS, "patience": C.PATIENCE, "imgsz": C.IMGSZ,
+    "training": {"base_model": BASE_MODEL, "model_selection": model_selection, "epochs": C.EPOCHS, "patience": C.PATIENCE, "imgsz": C.IMGSZ,
                  "batch": C.BATCH, "seed": C.SEED, "device": str(DEVICE)},
     "test_box": {"per_class": per_class, "overall": overall, "confusion_matrix": confusion,
                  "confusion_labels": NAMES + ["background"]},
