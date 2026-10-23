@@ -179,10 +179,10 @@ Going from 0 to 75 minutes saves €55,693 per 1,000 X-rays: on average about **
 
 I used Claude (Anthropic) as an assistant throughout this assignment:
 
-- **Dataset and framing:** after I chose the medical area and the fracture X-ray idea, Claude checked several Roboflow Universe datasets for class counts and splits and proposed this one. I asked for the case to be set in Spain and in a specific hospital; Claude proposed La Paz.
+- **Dataset and framing:** after I chose the medical area and the fracture X-ray idea, Claude checked several Roboflow Universe datasets for class counts and splits and recommended this one, which I accepted. I asked for the case to be set in Spain and in a specific hospital; Claude proposed La Paz and I agreed.
 - **Figures and sources:** Claude searched for and proposed the costs, the base rate, the radiologist reading time and accuracy, and the La Paz volumes, with their sources (Madrid public prices, La Paz's 2023 annual report, PubMed, SERAM, the Royal College of Radiologists). I reviewed and accepted them.
-- **Code and training:** Claude wrote the code (`config.py`, `costing.py`, `train.py`, `app.py`), ran the training on my laptop, proposed the radiologist-time sweep and the YOLO11n vs YOLO11s comparison, and fixed bugs.
-- **Report:** Claude prepared a guide explaining every decision and number. I wrote this report from it; Claude corrected two figures and helped with the final formatting.
+- **Code and training:** Claude wrote the code (`config.py`, `costing.py`, `train.py`, `app.py`) and ran the first training run (YOLO11n); I ran the YOLO11s training on my laptop. I asked for the radiologist time to be based on data and whether the model could be improved; Claude proposed the radiologist-time sweep and the YOLO11n vs YOLO11s comparison. The pipeline keeps the model that is cheaper on validation, which was YOLO11n.
+- **Report:** I wrote this report from a guide Claude prepared explaining each decision and number; Claude corrected two figures and converted it to Markdown.
 
 I studied every decision and number in this report so that I can explain and defend them without the code in front of me.
 
