@@ -64,6 +64,24 @@
   },
   "training": {
     "base_model": "yolo11n.pt",
+    "model_selection": [
+      {
+        "base_model": "yolo11n.pt",
+        "weights": "runs/fracture-yolo11n/weights/best.pt",
+        "epochs_run": 80,
+        "val_map50": 0.25469,
+        "val_image_roc_auc": 0.8705202312138729,
+        "val_cost_per_1000": 31422.381502890177
+      },
+      {
+        "base_model": "yolo11s.pt",
+        "weights": "runs/fracture-yolo11s/weights/best.pt",
+        "epochs_run": 68,
+        "val_map50": 0.22433,
+        "val_image_roc_auc": 0.8291494632535095,
+        "val_cost_per_1000": 33834.61271676301
+      }
+    ],
     "epochs": 80,
     "patience": 20,
     "imgsz": 512,
